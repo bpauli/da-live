@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Workflow icon vs the curated set</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; padding: 32px; color: #222; }
+  .row { display: flex; gap: 28px; align-items: flex-end; margin: 24px 0; }
+  figure { margin: 0; text-align: center; }
+  svg { display: block; margin: 0 auto 6px; color: #464646; }
+  .s32 svg { width: 32px; height: 32px; }
+  .s20 svg { width: 20px; height: 20px; }
+  .tint-pending { color: #d38300; } .tint-positive { color: #007a4d; } .tint-negative { color: #c9252d; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #666; margin-top: 32px; }
+</style></head><body>
+<h1>Workflow icon candidates against the curated set</h1>
+<p><b>1 = Coral port</b> (Spectrum 1 glyph, refitted to the 20 box). <b>2 = redrawn at S2 weight</b> (thin rounded strokes, like clock).</p>
+<h2>32px, as rendered in the drawer cell</h2>
+<div class="row s32">
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow-20-n.svg#icon"></use></svg>workflow 1<br><small>Coral port</small></figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow2-20-n.svg#icon"></use></svg>workflow 2<br><small>S2 redraw</small></figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-clock-20-n.svg#icon"></use></svg>clock</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-checkmarkcircle-20-n.svg#icon"></use></svg>checkmarkcircle</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-cancel-20-n.svg#icon"></use></svg>cancel</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-publish-20-n.svg#icon"></use></svg>publish</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-history-20-n.svg#icon"></use></svg>history</figure>
+</div>
+<h2>20px, the native size</h2>
+<div class="row s20">
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow-20-n.svg#icon"></use></svg>workflow 1</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow2-20-n.svg#icon"></use></svg>workflow 2</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-clock-20-n.svg#icon"></use></svg>clock</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-checkmarkcircle-20-n.svg#icon"></use></svg>checkmarkcircle</figure>
+  <figure><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-cancel-20-n.svg#icon"></use></svg>cancel</figure>
+</div>
+<h2>Tinted by state, 32px</h2>
+<div class="row s32">
+  <figure class="tint-pending"><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow2-20-n.svg#icon"></use></svg>pending</figure>
+  <figure class="tint-positive"><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow2-20-n.svg#icon"></use></svg>positive</figure>
+  <figure class="tint-negative"><svg viewBox="0 0 20 20"><use href="/img/icons/s2-icon-workflow2-20-n.svg#icon"></use></svg>negative</figure>
+</div>
+</body></html>

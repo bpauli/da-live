@@ -1,16 +1,26 @@
 /*
- * PROTOTYPE - THROWAWAY CODE. DO NOT MERGE.
+ * PROTOTYPE v2 - THROWAWAY CODE. DO NOT MERGE.
  *
- * Question: what should a plugin-contributed workflow status look like in the
- * browse list? Three variants of the row badge and the drawer cell, switchable
- * with ?variant=A|B|C on the browse URL, rendered on the real browse page with
- * real rows and real density.
+ * Question: what should the plugin-contributed workflow status CELL look like
+ * inside the item details drawer? Three structurally different treatments,
+ * switchable with ?variant=A|B|C on the browse URL.
  *
- * Ticket: https://github.com/bpauli/da-live/issues/21
- * Contract being rendered: https://github.com/bpauli/da-live/issues/20
- *   getStatus(item, ctx) -> { state, label, detail?, href? } | null
- *   state: neutral | pending | positive | negative
- *   null is the COMMON case: most rows have no status.
+ * v1 (row badges: pill / edge rail / status column) was rejected in
+ * https://github.com/bpauli/da-live/issues/21 because a badge on every row
+ * forces eager loading. v2 therefore:
+ *   - never touches the collapsed row,
+ *   - loads LAZILY on expand, refetching on every expand (like updateAEMStatus),
+ *   - uses SHORT labels ("In Review", "Approved"),
+ *   - takes a per-status ICON name from the plugin,
+ *   - tints by state: neutral | pending | positive | negative.
+ *
+ * Contract: https://github.com/bpauli/da-live/issues/20 (see superseding comment)
+ *   async getStatus(item, ctx) -> { state, label, icon?, detail?, href? } | null
+ *
+ * NOTE ON ICONS: the host default `workflow` does not exist yet in DA's curated
+ * set (https://github.com/bpauli/da-live/issues/25), so this prototype uses
+ * `history` as the stand-in default. Per-status icons below are all real,
+ * verified to resolve at /img/icons/s2-icon-<name>-20-n.svg.
  *
  * Fake data only. No network, no plugin, no worker.
  */
@@ -18,9 +28,9 @@
 import { html, nothing } from 'da-lit';
 
 export const VARIANTS = {
-  A: 'Pill in the row',
-  B: 'Edge rail, words in the drawer only',
-  C: 'Status column',
+  A: 'Labelled cell, detail underneath',
+  B: 'Icon-led cell, parity with Previewed',
+  C: 'Full-width strip under the cells',
 };
 
 export function getVariant() {
@@ -30,30 +40,15 @@ export function getVariant() {
 
 /* ---------------------------------------------------------------- fake data */
 
-// Simulates the host-owned warm store: nothing is known for ~1.5s after load,
-// so the empty -> filled transition is visible. The real host does not call
-// getStatus at all during this window.
-const WARM_MS = 1500;
-let warm = false;
-const listeners = new Set();
-setTimeout(() => {
-  warm = true;
-  listeners.forEach((cb) => cb());
-}, WARM_MS);
-
-export function onWarm(cb) {
-  if (warm) return () => {};
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
+const LATENCY_MS = 900; // simulates one request per expand
 
 const STATUSES = [
   null,
   null,
-  null,
   {
     state: 'pending',
-    label: 'Pending approval',
+    label: 'In Review',
+    icon: 'clock',
     detail: [
       { label: 'Requested by', value: 'pauli' },
       { label: 'Approver', value: 'ana' },
@@ -64,10 +59,9 @@ const STATUSES = [
   null,
   {
     state: 'negative',
-    // Deliberately long: tests truncation at row density.
-    label: 'Changes requested by the reviewer, please revise and resubmit',
+    label: 'Changes requested',
+    icon: 'cancel',
     detail: [
-      { label: 'Requested by', value: 'pauli' },
       { label: 'Reviewer', value: 'ana' },
       { label: 'Comment', value: 'Legal copy in the second section is out of date.' },
     ],
@@ -77,17 +71,18 @@ const STATUSES = [
   {
     state: 'positive',
     label: 'Approved',
+    icon: 'checkmarkcircle',
     detail: [
       { label: 'Approved by', value: 'ana' },
       { label: 'Approved', value: 'Sep 23, 2026 9:12 AM' },
     ],
   },
   null,
-  null,
   {
     state: 'neutral',
-    label: 'In review',
-    detail: [{ label: 'Reviewer', value: 'ana' }],
+    label: 'Draft',
+    // No icon: exercises the fallback chain (status icon -> config icon -> host default).
+    detail: [{ label: 'Owner', value: 'pauli' }],
   },
   null,
 ];
@@ -98,106 +93,52 @@ function hash(str) {
   return h;
 }
 
-// Stands in for: getStatus(item, ctx) over host-owned warm data.
-export function protoStatusFor({ path, ext }) {
-  if (!warm) return undefined; // not warmed: host would not call the plugin at all
-  if (!ext || ext === 'link') return null; // item-kind prefilter (issue #19)
-  return STATUSES[hash(path) % STATUSES.length];
+// Stands in for: await getStatus(item, ctx), called by the host on expand.
+export function protoFetchStatus({ path, ext }) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (!ext || ext === 'link') resolve(null); // item-kind prefilter
+      else resolve(STATUSES[hash(path) % STATUSES.length]);
+    }, LATENCY_MS);
+  });
+}
+
+const CONFIG_ICON = 'comment'; // the config row's default icon
+const HOST_ICON = 'history'; // stands in for the missing `workflow` icon
+
+function iconFor(status) {
+  return status.icon || CONFIG_ICON || HOST_ICON;
 }
 
 /* ------------------------------------------------------------------ styles */
 
-export const protoRowStyles = html`
+export const protoStyles = html`
   <style>
-    .proto-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-      font-size: 12px;
-    }
-
-    .proto-dot {
-      flex: 0 0 auto;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--proto-color);
-    }
-
-    .proto-badge-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .proto-neutral { --proto-color: var(--s2-gray-500, #8f8f8f); }
+    .proto-neutral { --proto-color: light-dark(#6e6e6e, #a5a5a5); }
     .proto-pending { --proto-color: #d38300; }
     .proto-positive { --proto-color: #007a4d; }
     .proto-negative { --proto-color: #c9252d; }
 
-    /* Variant A: pill sitting before the Modified date. */
-    :host(.proto-variant-A) .da-item-list-item-title {
-      grid-template-columns: 1fr auto auto;
-    }
-
-    .proto-a {
-      padding: 3px 10px 3px 8px;
-      border-radius: 10px;
-      background: light-dark(#f3f3f3, #2a2a2a);
-      max-width: 200px;
-      margin-right: 16px;
-    }
-
-    /* Variant B: rail at the row edge, dot after the name, no words. */
-    :host(.proto-railed) .da-item-list-item-inner::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      background: var(--proto-rail-color);
-    }
-
-    .proto-name-dot {
+    .proto-icon {
+      width: 20px;
+      height: 20px;
       flex: 0 0 auto;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--proto-color);
+      color: var(--proto-color);
     }
 
-    /* Variant C: its own column between Name and Modified. */
-    :host(.proto-columned) .da-item-list-item-title {
-      grid-template-columns: 1fr 140px auto;
-    }
-
-    .proto-c {
-      max-width: 140px;
-      color: var(--s2-gray-700, #464646);
-    }
-
-    /* Drawer cells */
-    .proto-drawer-title {
+    .proto-title {
       text-transform: uppercase;
       font-weight: 700;
       margin-bottom: 3px;
     }
 
-    .proto-drawer-b {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .proto-label { font-weight: 700; }
 
-    .proto-drawer-c p { margin: 0 0 4px; }
-
-    .proto-drawer-c .proto-detail-row {
+    .proto-detail-row {
       display: flex;
       gap: 6px;
-      color: var(--s2-gray-700, #464646);
       line-height: 1.5;
+      color: var(--s2-gray-700, #464646);
     }
 
     .proto-detail-key { font-weight: 700; }
@@ -208,68 +149,114 @@ export const protoRowStyles = html`
       color: var(--s2-blue-800, #0265dc);
     }
 
-    :host(.proto-columned) .da-item-list-item-details,
-    :host(.proto-drawer-wide) .da-item-list-item-details {
-      grid-template-columns: var(--da-list-action-width, 32px) 80px 1fr 182px 182px 200px;
+    /* A: labelled cell, sixth column, detail underneath. */
+    .proto-cell-a .proto-label-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    /* B: icon-led, mirrors the Previewed / Published anatomy. */
+    .proto-cell-b {
+      display: flex;
+      gap: var(--s2-spacing-100, 8px);
+      align-items: flex-start;
+    }
+
+    .proto-cell-b .proto-icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    /* C: full-width strip on its own line under the four native cells. */
+    .proto-strip {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--s2-gray-100, #e6e6e6);
+    }
+
+    .proto-strip-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .proto-strip .proto-detail-row { gap: 6px; }
+
+    /* Six-column drawer for A and B; C keeps the native five. */
+    :host(.proto-variant-A) .da-item-list-item-details,
+    :host(.proto-variant-B) .da-item-list-item-details {
+      grid-template-columns: var(--da-list-action-width, 32px) 80px 1fr 182px 182px 220px;
     }
   </style>
 `;
 
-/* ----------------------------------------------------------------- the row */
+/* ------------------------------------------------------------------- cells */
 
-export function protoRowBadge(status, variant) {
-  if (variant === 'B' || !status) return nothing;
-  const cls = variant === 'A' ? 'proto-a' : 'proto-c';
-  return html`
-    <div class="proto-badge ${cls} proto-${status.state}" title=${status.label}>
-      <span class="proto-dot"></span>
-      <span class="proto-badge-text">${status.label}</span>
-    </div>`;
-}
+const icon = (name) => html`<svg class="proto-icon" viewBox="0 0 20 20" aria-hidden="true"><use href="/img/icons/s2-icon-${name}-20-n.svg#icon"></use></svg>`;
 
-export function protoNameDot(status, variant) {
-  if (variant !== 'B' || !status) return nothing;
-  return html`<span class="proto-name-dot proto-${status.state}" aria-label=${status.label}></span>`;
-}
+const detailRows = (status) => (status.detail ?? []).map((d) => html`
+  <div class="proto-detail-row">
+    <span class="proto-detail-key">${d.label}</span>
+    <span>${d.value}</span>
+  </div>`);
 
-/* -------------------------------------------------------------- the drawer */
+const link = (status) => (status.href
+  ? html`<a class="proto-link" href=${status.href}>Open in inbox</a>`
+  : nothing);
 
 export function protoDrawerCell(status, variant) {
+  // undefined = loading (host has called the plugin, nothing back yet)
   if (status === undefined) {
-    return html`<div class="proto-drawer">
-      <p class="proto-drawer-title">Workflow</p>
-      <p>Checking</p>
-    </div>`;
+    return html`
+      <div class="proto-cell">
+        <p class="proto-title">Workflow</p>
+        <p>Checking</p>
+      </div>`;
   }
+  // null = no status for this page. The common case: render nothing at all.
   if (!status) return nothing;
 
   if (variant === 'A') {
     return html`
-      <div class="proto-drawer">
-        <p class="proto-drawer-title">Workflow</p>
-        <p>${status.label}</p>
+      <div class="proto-cell proto-cell-a proto-${status.state}">
+        <p class="proto-title">Workflow</p>
+        <div class="proto-label-row">
+          ${icon(iconFor(status))}
+          <span class="proto-label">${status.label}</span>
+        </div>
+        ${detailRows(status)}
+        ${link(status)}
       </div>`;
   }
 
   if (variant === 'B') {
-    const bits = (status.detail ?? []).map((d) => d.value).join(' - ');
     return html`
-      <div class="proto-drawer proto-drawer-b proto-${status.state}">
-        <span class="proto-dot"></span>
-        <p>${status.label}${bits ? html` - ${bits}` : nothing}</p>
+      <div class="proto-cell proto-cell-b proto-${status.state}">
+        ${icon(iconFor(status))}
+        <div>
+          <p class="proto-title">Workflow</p>
+          <p class="proto-label">${status.label}</p>
+          ${link(status)}
+        </div>
       </div>`;
   }
 
   return html`
-    <div class="proto-drawer proto-drawer-c proto-${status.state}">
-      <p class="proto-drawer-title">Workflow</p>
-      <p>${status.label}</p>
-      ${(status.detail ?? []).map((d) => html`
-        <div class="proto-detail-row">
-          <span class="proto-detail-key">${d.label}</span>
-          <span>${d.value}</span>
-        </div>`)}
-      ${status.href ? html`<a class="proto-link" href=${status.href}>Open in inbox</a>` : nothing}
+    <div class="proto-strip proto-${status.state}">
+      <div class="proto-strip-head">
+        ${icon(iconFor(status))}
+        <span class="proto-title" style="margin:0">Workflow</span>
+        <span class="proto-label">${status.label}</span>
+      </div>
+      ${detailRows(status)}
+      ${link(status)}
     </div>`;
 }
 

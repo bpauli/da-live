@@ -370,7 +370,7 @@ export default class DaListItem extends LitElement {
             <p class="da-aem-icon-date">${this._live?.status === 401 || this._live?.status === 403 ? 'Not authorized' : this.renderAemDate('_live')}</p>
           </div>
         </a>
-        ${protoDrawerCell(this._protoStatus, this._protoVariant)}
+        ${protoDrawerCell(this._protoStatus)}
       </div>
     `;
   }

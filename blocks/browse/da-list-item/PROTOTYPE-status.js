@@ -26,16 +26,15 @@
  */
 
 import { html, nothing } from 'da-lit';
+import { getNx2 } from '../../../scripts/utils.js';
 
-export const VARIANTS = {
-  A: 'Labelled cell, detail underneath',
-  B: 'Icon-led cell, parity with Previewed',
-  C: 'Full-width strip under the cells',
-};
+// v3: B won. Detail moved into a CLICK-triggered popover on the icon.
+await import(`${getNx2()}/blocks/shared/popover/popover.js`);
+
+export const VARIANTS = { B: 'Icon-led cell, detail in a click popover' };
 
 export function getVariant() {
-  const v = new URLSearchParams(window.location.search).get('variant');
-  return VARIANTS[v] ? v : 'A';
+  return 'B';
 }
 
 /* ---------------------------------------------------------------- fake data */
@@ -149,14 +148,6 @@ export const protoStyles = html`
       color: var(--s2-blue-800, #0265dc);
     }
 
-    /* A: labelled cell, sixth column, detail underneath. */
-    .proto-cell-a .proto-label-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 4px;
-    }
-
     /* B: icon-led, mirrors the Previewed / Published anatomy. */
     .proto-cell-b {
       display: flex;
@@ -169,30 +160,41 @@ export const protoStyles = html`
       height: 32px;
     }
 
-    /* C: full-width strip on its own line under the four native cells. */
-    .proto-strip {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid var(--s2-gray-100, #e6e6e6);
+    /* The icon is the trigger. Only interactive when there IS detail. */
+    .proto-icon-btn {
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      border-radius: 4px;
+      line-height: 0;
     }
 
-    .proto-strip-head {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .proto-icon-btn:focus-visible {
+      outline: 2px solid var(--s2-blue-800, #0265dc);
+      outline-offset: 2px;
     }
 
-    .proto-strip .proto-detail-row { gap: 6px; }
+    .proto-icon-btn .proto-icon {
+      width: 32px;
+      height: 32px;
+    }
 
-    /* Six-column drawer for A and B; C keeps the native five. */
-    :host(.proto-variant-A) .da-item-list-item-details,
+    .proto-pop-inner {
+      padding: 12px 14px;
+      min-width: 220px;
+      max-width: 320px;
+      font-size: 14px;
+    }
+
+    .proto-pop-title {
+      margin: 0 0 8px;
+      font-weight: 700;
+    }
+
+    /* Sixth column, narrower than A needed because detail moved out. */
     :host(.proto-variant-B) .da-item-list-item-details {
-      grid-template-columns: var(--da-list-action-width, 32px) 80px 1fr 182px 182px 220px;
+      grid-template-columns: var(--da-list-action-width, 32px) 80px 1fr 182px 182px 160px;
     }
   </style>
 `;
@@ -211,52 +213,62 @@ const link = (status) => (status.href
   ? html`<a class="proto-link" href=${status.href}>Open in inbox</a>`
   : nothing);
 
-export function protoDrawerCell(status, variant) {
-  // undefined = loading (host has called the plugin, nothing back yet)
+function openDetail(e) {
+  const btn = e.currentTarget;
+  const pop = btn.parentElement.querySelector('nx-popover');
+  if (pop.open) {
+    pop.close();
+    return;
+  }
+  pop.show({ anchor: btn, placement: 'below' });
+  btn.setAttribute('aria-expanded', 'true');
+  pop.addEventListener('close', () => {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.focus();
+  }, { once: true });
+}
+
+export function protoDrawerCell(status) {
+  // undefined = loading. Same cell, same place, so nothing jumps when data lands.
   if (status === undefined) {
     return html`
-      <div class="proto-cell">
-        <p class="proto-title">Workflow</p>
-        <p>Checking</p>
-      </div>`;
-  }
-  // null = no status for this page. The common case: render nothing at all.
-  if (!status) return nothing;
-
-  if (variant === 'A') {
-    return html`
-      <div class="proto-cell proto-cell-a proto-${status.state}">
-        <p class="proto-title">Workflow</p>
-        <div class="proto-label-row">
-          ${icon(iconFor(status))}
-          <span class="proto-label">${status.label}</span>
-        </div>
-        ${detailRows(status)}
-        ${link(status)}
-      </div>`;
-  }
-
-  if (variant === 'B') {
-    return html`
-      <div class="proto-cell proto-cell-b proto-${status.state}">
-        ${icon(iconFor(status))}
+      <div class="proto-cell-b proto-neutral">
+        <svg class="proto-icon" viewBox="0 0 20 20" aria-hidden="true"></svg>
         <div>
           <p class="proto-title">Workflow</p>
-          <p class="proto-label">${status.label}</p>
-          ${link(status)}
+          <p>Checking</p>
         </div>
       </div>`;
   }
+  // null = no status. The common case: render nothing at all.
+  if (!status) return nothing;
+
+  const hasDetail = !!status.detail?.length;
 
   return html`
-    <div class="proto-strip proto-${status.state}">
-      <div class="proto-strip-head">
-        ${icon(iconFor(status))}
-        <span class="proto-title" style="margin:0">Workflow</span>
-        <span class="proto-label">${status.label}</span>
+    <div class="proto-cell-b proto-${status.state}">
+      ${hasDetail ? html`
+        <button
+          class="proto-icon-btn"
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-label="${status.label} details"
+          @click=${openDetail}>
+          ${icon(iconFor(status))}
+        </button>
+        <nx-popover class="proto-pop">
+          <div class="proto-pop-inner">
+            <p class="proto-pop-title">${status.label}</p>
+            ${detailRows(status)}
+            ${link(status)}
+          </div>
+        </nx-popover>
+      ` : icon(iconFor(status))}
+      <div>
+        <p class="proto-title">Workflow</p>
+        <p class="proto-label">${status.label}</p>
       </div>
-      ${detailRows(status)}
-      ${link(status)}
     </div>`;
 }
 

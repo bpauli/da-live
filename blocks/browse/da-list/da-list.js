@@ -1,4 +1,6 @@
 import { LitElement, html, repeat, nothing } from 'da-lit';
+// PROTOTYPE (issue #21) - THROWAWAY. Remove with the PROTO markers below.
+import { getVariant, mountProtoSwitcher } from '../da-list-item/PROTOTYPE-status.js';
 import { isFavorite, toggleFavorite } from '../shared/favorites.js';
 import { getNx, getNx2Api, sanitizePathParts } from '../../../scripts/utils.js';
 import {
@@ -80,6 +82,7 @@ export default class DaList extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [SHARED, STYLE];
+    mountProtoSwitcher(); // PROTO
   }
 
   async update(props) {
@@ -1237,6 +1240,9 @@ export default class DaList extends LitElement {
     const showList = filteredItems?.length > 0 || hasMorePages;
 
     return html`
+      ${getVariant() === 'C' ? html`<style>
+        .da-browse-sort { grid-template-columns: var(--da-list-action-width) 1fr 140px 160px; }
+      </style>` : nothing}
       <div class="da-browse-panel-header" role="row">
         ${this.renderCheckBox()}
         <div class="da-browse-sort" role="presentation">
@@ -1274,6 +1280,10 @@ export default class DaList extends LitElement {
               Name
             </button>
           </div>
+          ${getVariant() === 'C' ? html`
+            <div class="da-browse-header-container" role="columnheader">
+              <button class="da-browse-header-name" disabled>Status</button>
+            </div>` : nothing}
           <div class="da-browse-header-container" role="columnheader" aria-sort="${this.getSortAttr(this._sortDate) || 'none'}">
             <button
               class="da-browse-header-name ${this._sortDate} ${this._bulkLoading ? 'loading' : ''}"

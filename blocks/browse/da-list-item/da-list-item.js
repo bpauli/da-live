@@ -1,4 +1,15 @@
 import { LitElement, html, nothing, until } from 'da-lit';
+// PROTOTYPE (issue #21) - THROWAWAY. Remove with the PROTO markers below.
+import {
+  getVariant,
+  onWarm,
+  protoStatusFor,
+  protoRowStyles,
+  protoRowBadge,
+  protoNameDot,
+  protoDrawerCell,
+  mountProtoSwitcher,
+} from './PROTOTYPE-status.js';
 import { delay, sanitizeName, formatDate } from '../../shared/utils.js';
 import { getNx, getNx2Api } from '../../../scripts/utils.js';
 import { ICONS, iconPathForExt } from '../../shared/icons.js';
@@ -32,7 +43,31 @@ export default class DaListItem extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [SHARED, STYLE];
+    // PROTO start
+    mountProtoSwitcher();
+    this._protoVariant = getVariant();
+    this.classList.add(`proto-variant-${this._protoVariant}`);
+    this._protoOff = onWarm(() => this.requestUpdate());
+    if (this._protoVariant === 'C') this.classList.add('proto-columned');
+    if (this._protoVariant !== 'C') this.classList.add('proto-drawer-wide');
+    // PROTO end
   }
+
+  // PROTO start
+  get _protoStatus() {
+    return protoStatusFor({ path: this.path, ext: this.ext });
+  }
+
+  _protoRail() {
+    const status = this._protoStatus;
+    const railed = this._protoVariant === 'B' && !!status;
+    this.classList.toggle('proto-railed', railed);
+    if (railed) {
+      const color = { neutral: '#8f8f8f', pending: '#d38300', positive: '#007a4d', negative: '#c9252d' }[status.state];
+      this.style.setProperty('--proto-rail-color', color);
+    }
+  }
+  // PROTO end
 
   async update(props) {
     if (props.has('rename')) {
@@ -266,8 +301,10 @@ export default class DaListItem extends LitElement {
           `}
           <div class="da-item-list-item-name">
             <span class="da-item-list-item-name-text">${this.name}</span>
+            ${protoNameDot(this._protoStatus, this._protoVariant)}
           </div>
         </div>
+        ${protoRowBadge(this._protoStatus, this._protoVariant)}
         <div class="da-item-list-item-date">${this.ext === 'link' ? nothing : this.renderDate()}</div>
       </a>`;
   }
@@ -307,7 +344,9 @@ export default class DaListItem extends LitElement {
   }
 
   render() {
+    this._protoRail(); // PROTO
     return html`
+      ${protoRowStyles}
       <div class="da-item-list-item-inner ${this.allowselect ? 'can-select' : ''}" role="gridcell">
         ${this.allowselect ? this.renderCheckBox() : nothing}
         ${this.rename ? this.renderRename() : this.renderItem()}
@@ -343,6 +382,7 @@ export default class DaListItem extends LitElement {
             <p class="da-aem-icon-date">${this._live?.status === 401 || this._live?.status === 403 ? 'Not authorized' : this.renderAemDate('_live')}</p>
           </div>
         </a>
+        ${protoDrawerCell(this._protoStatus, this._protoVariant)}
       </div>
     `;
   }
